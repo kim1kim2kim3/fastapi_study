@@ -33,7 +33,7 @@ apartment = {
 
 studio = {
         "id": 3,
-        "name": "Cozy Studio",
+        "name": "Modern Studio",
         "price_per_night": 150,
         "bedrooms": 1,
         "bathrooms": 1,
@@ -46,10 +46,18 @@ studio = {
 def root():
     return {"message": "Welcome to the Rent-a-Room API!"}
 
-
+# 함수 인자만 → Query parameter
 @app.get("/rooms", status_code=status.HTTP_200_OK)
-def get_rooms():
-    return [house, apartment, studio]
+def get_rooms(max_price: int | None = None, search: str | None = None):  # 참고로 기본값이 없는 쿼리 파라미터는, 기본값이 있는 쿼리 파라미터보다 먼저 선언되어야 한다.
+    results = [house, apartment, studio]
+
+    if max_price:
+        results = [room for room in results if room["price_per_night"] <= max_price]
+
+    if search:
+        results = [room for room in results if search.lower() in room["name"].lower()]
+
+    return results
 
 """ # 위에 app.mount를 선언했기 때문에, /assets로 들어오는 요청은 assets 폴더에서 정적 파일을 찾도록 한다.
 @app.get("/rooms/faq", status_code=status.HTTP_200_OK)
@@ -59,8 +67,9 @@ def get_room_faq():
         "check-out": "Until 12PM"
     }  """
 
+# {} + 함수 인자 → Path parameter
 @app.get("/rooms/{room_id}", status_code=status.HTTP_200_OK)
-# int가 아닌 것을 파라미터로 받으면 422 Unprocessable Entity를 반환한다. 즉, int로 받도록 강제한다
+# int가 아닌 것을 파라미터로 받으면 422 Unprocessable Entity를 반환한다. 즉, int로 받도록 강제한다 ex) /rooms/1.5 → 422 Unprocessable Entity
 def get_rooms(room_id: int):
     for room in [house, apartment, studio]:
         if room["id"] == room_id:
