@@ -1,4 +1,7 @@
-from fastapi import FastAPI, status, HTTPException
+# Fast API같은 서드파티 라이브러리보다, 표준 Python에서 제공되기 떄문에 위에 from typing import Annotated를 선언해주어야 한다.
+from typing import Annotated
+
+from fastapi import FastAPI, status, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Rent-a-Room API",
@@ -48,7 +51,7 @@ def root():
 
 # 함수 인자만 → Query parameter
 @app.get("/rooms", status_code=status.HTTP_200_OK)
-def get_rooms(max_price: int | None = None, search: str | None = None):  # 참고로 기본값이 없는 쿼리 파라미터는, 기본값이 있는 쿼리 파라미터보다 먼저 선언되어야 한다.
+def get_rooms(max_price: int | None = None, search: Annotated[str | None, Query(min_length=3, max_length=10)] = None):  # 참고로 기본값이 없는 쿼리 파라미터는, 기본값이 있는 쿼리 파라미터보다 먼저 선언되어야 한다.
     results = [house, apartment, studio]
 
     if max_price:
