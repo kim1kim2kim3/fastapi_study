@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, status, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
+from pydantic import AfterValidator
 
 app = FastAPI(title="Rent-a-Room API",
               description="API for managing room rentals",
@@ -42,6 +43,27 @@ studio = {
         "bathrooms": 1,
     }
 
+# Query를 변수로 선언해서 재사용할 수 있다.
+search_query_validation = Query(
+    min_length=3,
+    max_length=10,
+    title="Search term",
+    description="Provide a keyword to look for within the room's title"
+)
+
+def fail_if_funny(search: str):
+    if "lol" in search:
+        raise ValueError("No funny business allowed")
+    return search
+
+# AfterValidator를 변수로 선언해서 재사용할 수 있다.
+search_humor_ban_validation = AfterValidator(fail_if_funny)
+
+# 검색 쿼리 파라미터의 타입과 검증 규칙을 묶어 재사용한다.(추가로 여기는 Annotated만 사용할 뿐, 기본값은 None으로 설정해줘야 한다.)
+SearchQuery = Annotated[
+    str | None, search_query_validation, search_humor_ban_validation]
+
+
 
 
 
@@ -49,9 +71,11 @@ studio = {
 def root():
     return {"message": "Welcome to the Rent-a-Room API!"}
 
+
 # 함수 인자만 → Query parameter
 @app.get("/rooms", status_code=status.HTTP_200_OK)
-def get_rooms(max_price: int | None = None, search: Annotated[str | None, Query(min_length=3, max_length=10)] = None):  # 참고로 기본값이 없는 쿼리 파라미터는, 기본값이 있는 쿼리 파라미터보다 먼저 선언되어야 한다.
+def get_rooms(                                                                                                                                                                                                                # 이 AFterValidator는 앞선 Query에서 min_length와 max_length를 만족하는지 검증한 후, 통과됐다는 전제로 진행한다.
+    max_price: Annotated[int | None, Query(ge=10, le=10_000)]=None, search: Annotated[str | None, Query(min_length=3, max_length=10, title="Search term", description="Provide a keyword to look for within the room's title"), AfterValidator(fail_if_funny)] = None):  # 참고로 기본값이 없는 쿼리 파라미터는, 기본값이 있는 쿼리 파라미터보다 먼저 선언되어야 한다.
     results = [house, apartment, studio]
 
     if max_price:
@@ -61,6 +85,22 @@ def get_rooms(max_price: int | None = None, search: Annotated[str | None, Query(
         results = [room for room in results if search.lower() in room["name"].lower()]
 
     return results
+
+# 리팩토링 추가한 것, 위에랑 Query랑 AfterValidator는 동일함
+@app.get("/rooms/mansions", status_code=status.HTTP_200_OK)
+def get_rooms(                                                                                                                                                                                                               
+    max_price: Annotated[int | None, Query(ge=10, le=10_000)]=None,
+    search: SearchQuery = None):  # 참고로 기본값이 없는 쿼리 파라미터는, 기본값이 있는 쿼리 파라미터보다 먼저 선언되어야 한다.
+    results = [house, apartment, studio]
+
+    if max_price:
+        results = [room for room in results if room["price_per_night"] <= max_price]
+
+    if search:
+        results = [room for room in results if search.lower() in room["name"].lower()]
+
+    return results
+
 
 """ # 위에 app.mount를 선언했기 때문에, /assets로 들어오는 요청은 assets 폴더에서 정적 파일을 찾도록 한다.
 @app.get("/rooms/faq", status_code=status.HTTP_200_OK)
