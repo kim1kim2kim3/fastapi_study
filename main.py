@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, status, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
-from pydantic import AfterValidator
+from pydantic import AfterValidator,BaseModel, Field, field_validator
 
 app = FastAPI(title="Rent-a-Room API",
               description="API for managing room rentals",
@@ -43,26 +43,25 @@ studio = {
         "bathrooms": 1,
     }
 
-# Query를 변수로 선언해서 재사용할 수 있다.
-search_query_validation = Query(
-    min_length=3,
-    max_length=10,
-    title="Search term",
-    description="Provide a keyword to look for within the room's title"
-)
 
-def fail_if_funny(search: str):
-    if "lol" in search:
-        raise ValueError("No funny business allowed")
-    return search
-
-# AfterValidator를 변수로 선언해서 재사용할 수 있다.
-search_humor_ban_validation = AfterValidator(fail_if_funny)
-
-# 검색 쿼리 파라미터의 타입과 검증 규칙을 묶어 재사용한다.(추가로 여기는 Annotated만 사용할 뿐, 기본값은 None으로 설정해줘야 한다.)
-SearchQuery = Annotated[
-    str | None, search_query_validation, search_humor_ban_validation]
-
+class RoomQueryParams(BaseModel):
+    max_price: int | None = Field(default=None, ge=10, le=10_000)
+    search: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=10,
+        title="Search term",
+        description="Provide a keyword to look for within the room's title"
+    )
+                 # 여기서는 연결하고 싶은 필드명을 넣어주면 된다. 즉, search 필드에 대한 검증을 수행한다.
+    @field_validator("search")
+    # 우리는 인스턴스를 만들어서 사용하는게 아닌, RoomQueryParams 클래스 자체를 사용하기 때문에, @staticmethod를 붙여주어야 한다.
+    @classmethod
+    def fail_if_funny(cls, search: str) -> str:
+        if "lol" in search:
+            raise ValueError("No funny business allowed")
+        return search
+    
 
 
 
@@ -88,16 +87,14 @@ def get_rooms(                                                                  
 
 # 리팩토링 추가한 것, 위에랑 Query랑 AfterValidator는 동일함
 @app.get("/rooms/mansions", status_code=status.HTTP_200_OK)
-def get_rooms(                                                                                                                                                                                                               
-    max_price: Annotated[int | None, Query(ge=10, le=10_000)]=None,
-    search: SearchQuery = None):  # 참고로 기본값이 없는 쿼리 파라미터는, 기본값이 있는 쿼리 파라미터보다 먼저 선언되어야 한다.
+def get_rooms(params: Annotated[RoomQueryParams, Query()]):
     results = [house, apartment, studio]
 
-    if max_price:
-        results = [room for room in results if room["price_per_night"] <= max_price]
+    if params.max_price:
+        results = [room for room in results if room["price_per_night"] <= params.max_price]
 
-    if search:
-        results = [room for room in results if search.lower() in room["name"].lower()]
+    if params.search:
+        results = [room for room in results if params.search.lower() in room["name"].lower()]
 
     return results
 
